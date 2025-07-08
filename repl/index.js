@@ -298,19 +298,6 @@ class Context {
     // Handle enhanced keyboard shortcuts
     if (key.ctrl) {
       switch (key.name) {
-        case 'space':
-          // Advanced auto-completion
-          if (server && server.completer) {
-            const [completions] = server.completer(line || '')
-            if (completions.length > 0) {
-              console.log('\n' + chalk.bold.cyan('🔥 Smart Completions:'))
-              completions.slice(0, 10).forEach((comp, i) => {
-                console.log(chalk.white(`  ${i + 1}. `) + comp)
-              })
-              console.log('')
-            }
-          }
-          return
         case 'r':
           // Rainbow mode toggle
           this.ui.toggleRainbow()

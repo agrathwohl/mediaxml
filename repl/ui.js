@@ -85,7 +85,6 @@ class UI {
   showShortcuts() {
     const shortcuts = [
       chalk.bold.cyan('🔥 Keyboard Shortcuts:'),
-      chalk.white('  • ') + chalk.yellow('Ctrl+Space') + chalk.white('  - Advanced auto-completion'),
       chalk.white('  • ') + chalk.yellow('Ctrl+R') + chalk.white('     - Rainbow mode (colorize brackets/parens)'),
       chalk.white('  • ') + chalk.yellow('Ctrl+H') + chalk.white('     - Show this help again'),
       chalk.white('  • ') + chalk.yellow('Ctrl+L') + chalk.white('     - Clear screen'),
