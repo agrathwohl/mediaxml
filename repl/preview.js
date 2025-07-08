@@ -24,7 +24,7 @@ function preview(context, result) {
     clearScreenDown(server.output)
 
     if (result) {
-      output = pretty(result)
+      output = pretty(result, { context })
 
       if (output) {
         output = output

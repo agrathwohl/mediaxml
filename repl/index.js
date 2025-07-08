@@ -1,5 +1,4 @@
-const { clearScreenDown, cursorTo, moveCursor } = require('readline')
-const { getCursorPreviewPosition } = require('./utils')
+const { clearScreenDown } = require('readline')
 const { Imports, Assignments } = require('../query')
 const { createCompleter } = require('./completer')
 const { createPrompt } = require('./prompt')
@@ -7,7 +6,6 @@ const { createLoader } = require('../loader')
 const { validate } = require('../validate')
 const { preview } = require('./preview')
 const { Parser } = require('../parser')
-const { pretty } = require('./pretty')
 const { fetch } = require('../fetch')
 const { watch } = require('./watch')
 const truncate = require('cli-truncate')
@@ -297,6 +295,43 @@ class Context {
       return
     }
 
+    // Handle enhanced keyboard shortcuts
+    if (key.ctrl) {
+      switch (key.name) {
+        case 'space':
+          // Advanced auto-completion
+          if (server && server.completer) {
+            const [completions] = server.completer(line || '')
+            if (completions.length > 0) {
+              console.log('\n' + chalk.bold.cyan('🔥 Smart Completions:'))
+              completions.slice(0, 10).forEach((comp, i) => {
+                console.log(chalk.white(`  ${i + 1}. `) + comp)
+              })
+              console.log('')
+            }
+          }
+          return
+        case 'r':
+          // Rainbow mode toggle
+          this.ui.toggleRainbow()
+          return
+        case 'h':
+          // Show help
+          this.ui.showShortcuts()
+          return
+        case 'l':
+          // Clear screen
+          this.ui.clearScreen()
+          return
+        case 't':
+          // Show performance stats
+          this.ui.showStats()
+          return
+        default:
+          return
+      }
+    }
+
     if ('function' === typeof this.handlers.onkeypress) {
       try {
         this.handlers.onkeypress(line, key, ...args)
@@ -310,10 +345,6 @@ class Context {
     }
 
     if ('backspace' === key.name && 0 === input.buffer.length) {
-      return
-    }
-
-    if (key.ctrl) {
       return
     }
 
@@ -340,7 +371,31 @@ class Context {
     const query = input.toString()
     let result = null
 
-    if (query && query.trim().length > 3) {
+    // Much more restrictive preview conditions
+    if (query && query.trim().length > 5) {
+      // Don't preview incomplete queries that start with :
+      if (/^\s*:/.test(query.trim())) {
+        return
+      }
+
+      // Don't preview queries with unmatched brackets
+      const openBrackets = (query.match(/\[/g) || []).length
+      const closeBrackets = (query.match(/\]/g) || []).length
+      if (openBrackets !== closeBrackets) {
+        return
+      }
+
+      // Don't preview queries with unmatched quotes
+      const quotes = (query.match(/"/g) || []).length
+      if (quotes % 2 !== 0) {
+        return
+      }
+
+      // Don't preview incomplete function calls
+      if (/\w+\($/.test(query.trim())) {
+        return
+      }
+
       // double wildcards can be expensive
       if ('**' === query.trim()) {
         return
@@ -358,8 +413,10 @@ class Context {
 
       try {
         result = await parser.query(query, { imports, assignments })
+        this.ui.incrementQueryCount()
       } catch (err) {
         debug(err)
+        // Don't show errors in preview mode - they're too noisy
       }
     }
 
@@ -372,7 +429,8 @@ class Context {
   start() {
     const { filename, options } = this
 
-    console.error(`Welcome to the ${chalk.magenta(chalk.bold('MediaXML'))} %s CLI`, pkg.version)
+    // Show enhanced welcome screen
+    this.ui.showWelcome()
     console.error('Please report bugs to %s', chalk.bold(chalk.italic(pkg.bugs.url)))
 
     if (!this.server) {

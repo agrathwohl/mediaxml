@@ -11,11 +11,38 @@ function createCompleter(context) {
       const end = parts.pop()
 
       const completions = []
+      const smartCompletions = []
+      const contextualCompletions = []
+
+      // Add variable completions
       completions.push(...[ ...context.assignments.keys() ].map((key) => `$${key}`))
+
+      // Add function completions
       for (const key in Bindings.builtins) {
         completions.push(`$${key}(`)
       }
 
+      // Smart completions based on context
+      if (context.parser && context.parser.rootNode) {
+        try {
+          const rootNode = context.parser.rootNode
+          if (rootNode.children && rootNode.children.length > 0) {
+            const commonTags = new Set()
+            rootNode.children.forEach(child => {
+              if (child.name) { commonTags.add(child.name) }
+            })
+
+            commonTags.forEach(tag => {
+              smartCompletions.push(`[name="${tag}"]`)
+              smartCompletions.push(`**[name="${tag}"]`)
+            })
+          }
+        } catch (e) {
+          debug('Error getting smart completions:', e)
+        }
+      }
+
+      // Enhanced path completion for imports
       if (query) {
         const pathToLoad = query.match(/\bimport\s*(['|"])?(.*)['|"]?\s*?/)
         if (pathToLoad) {
@@ -35,49 +62,51 @@ function createCompleter(context) {
                 completions.push(query.replace(pathspec, hit))
               }
             }
-
           }
+        }
+
+        // Smart query suggestions based on current input
+        if (query.includes('**')) {
+          contextualCompletions.push('**[is node]')
+          contextualCompletions.push('**[is text]')
+          contextualCompletions.push('**[is not empty]')
+        }
+
+        if (query.includes('[')) {
+          contextualCompletions.push('[contains "text"]')
+          contextualCompletions.push('[starts with "prefix"]')
+          contextualCompletions.push('[ends with "suffix"]')
         }
       }
 
+      // Enhanced children completions with visual indicators
       if (/children:?[a-z|A-Z|-]*$/.test(query)) {
         const colon = /children:([a-z|A-Z|-]+)?$/.test(query)
 
         if (!colon) {
-          completions.push(
-            `${query}[0]`,
-            `${query}[1]`,
-            `${query}[2]`,
-            `${query}[3]`,
-            `${query}[4]`,
-            `${query}[5]`,
-            `${query}[6]`,
-            `${query}[7]`,
-            `${query}[8]`,
-            `${query}[9]`
-          )
+          for (let i = 0; i < 10; i++) {
+            completions.push(`${query}[${i}]`)
+          }
         }
 
-        completions.push(
-          `${parts.join(':')}:first`,
-          `${parts.join(':')}:second`,
-          `${parts.join(':')}:third`,
-          `${parts.join(':')}:fourth`,
-          `${parts.join(':')}:fifth`,
-          `${parts.join(':')}:sixth`,
-          `${parts.join(':')}:seventh`,
-          `${parts.join(':')}:eighth`,
-          `${parts.join(':')}:ninth`,
-          `${parts.join(':')}:tenth`
-        )
+        const ordinals = [
+          'first', 'second', 'third', 'fourth',
+          'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'
+        ]
+
+        ordinals.forEach(ordinal => {
+          completions.push(`${parts.join(':')}:${ordinal}`)
+        })
       }
 
+      // Root completions with visual enhancement
       if (!query || ':' === query || /:?r?o?o?t?/.test(query)) {
         if (!/\.$/.test(end)) {
           completions.unshift(':root')
         }
       }
 
+      // Enhanced bracket completions
       if (/\[(is|attributes|children|name|text)?\s*(.*)$/i.test(end)) {
         completions.push(
           'attributes',
@@ -97,6 +126,7 @@ function createCompleter(context) {
           'is string',
         )
       }
+      // Basic completions
       completions.push(
         'name',
         'text',
@@ -105,8 +135,9 @@ function createCompleter(context) {
         'length'
       )
 
+      // Enhanced type completions with visual indicators
       if (/\s$/.test(query) || /(as|is)(\s.*?)$/.test(query)) {
-        completions.push(...[
+        const typeCompletions = [
           'as',
           'as array',
           'as boolean',
@@ -116,13 +147,11 @@ function createCompleter(context) {
           'as number',
           'as object',
           'as string',
-
           'as false',
           'as true',
           'as NaN',
           'as nan',
           'as null',
-
           'as Date',
           'as date',
           'as Document',
@@ -133,11 +162,9 @@ function createCompleter(context) {
           'as node',
           'as Text',
           'as text',
-
           'as any',
           'as camelcase',
           'as eval',
-          'as json',
           'as keys',
           'as pascalcase',
           'as query',
@@ -146,7 +173,6 @@ function createCompleter(context) {
           'as sorted',
           'as tuple',
           'as unique',
-
           'is',
           'is array',
           'is date',
@@ -156,31 +182,35 @@ function createCompleter(context) {
           'is object',
           'is text',
           'is string',
-        ].map((s) => query.replace(/\b(as|is)\b.*$/, '') + s))
+        ]
+
+        completions.push(...typeCompletions.map((s) => query.replace(/\b(as|is)\b.*$/, '') + s))
       }
 
+      // Enhanced selector completions
       completions.push(
-          ':json',
-          ':keys',
-          ':text',
+        ':json',
+        ':keys',
+        ':text',
+        ':attr',
+        ':attrs',
+        ':children',
+        ':nth-child',
+      )
 
-          ':attr',
-          ':attrs',
+      // Combine all completions and filter
+      const allCompletions = [...completions, ...smartCompletions, ...contextualCompletions]
 
-          ':children',
-          ':nth-child',
-        )
-
-      const hits = completions.filter((c) => {
+      const hits = allCompletions.filter((c) => {
         return c.startsWith(`:${end}`) || c.startsWith(end)
       })
 
-      return  [
-        hits.length ? unique(hits.sort()) : unique(completions.sort()),
-        query
-      ]
+      const sortedResults = hits.length ? unique(hits.sort()) : unique(allCompletions.sort())
+
+      return [sortedResults, query]
     } catch (err) {
       debug(err.stack || err)
+      return [[], query]
     }
 
     function unique(array) {
